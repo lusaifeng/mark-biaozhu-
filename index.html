@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>上图名人手稿</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+	<link rel="stylesheet" type="text/css" href="css.css">
+</head>
+
+<body>
+	<div class="M-details">		
+		<input type="hidden" id="pageName" value="compareWorks">
+
+		<div class="box" :style="{cursor: isClick?'crosshair':'auto'}">
+			<div class="canvas" @mousemove.prevent="draw" @mouseup="endDraw">
+				<!-- 手稿弹幕 -->
+				<div class="sg-danmu" @click="pauseDanmu" @mouseenter="pauseDanmu" @mouseout="moveDanmu">
+					<span v-for="(rect,index) in marks.rects" 
+					@click="currentDanmuspan = index" :style="{'left':left[index] + 'vw'}" :class="currentDanmuspan == index?'active':''">{{rect.tip}}</span>
+				</div>
+
+				<div class="zoom">
+					<!-- 手稿图片 -->
+					<div class="imgbox">
+						<img :src="marks.img" @mousedown.prevent="beginDraw" style="width: 1000px;height: 800px;">
+						<!-- 手稿标注 -->
+						<div class="rect" v-for="(rect, index) in marks.rects"
+						@mouseenter.stop="currentIndex = index" 
+						@mouseleave="currentIndex = null"
+						:style="getPosition(rect)"
+						v-show="currentDanmuspan == index || rect.isUser == true">
+						<span class="iconfont icon-yuanjiaojuxingkaobei rect-icon" v-show="!rect.isShow"></span>
+
+						<div class="tip" v-show="currentIndex == index || rect.isShow">
+							<div class="title">
+								<strong v-show="rect.isEdit">标注备注</strong>
+								<span class="title-btn" v-show="!rect.isEdit">{{rect.tag}}</span> 
+								<em>{{rect.time}}</em>								
+								<span class="right iconfont icon-delete"
+								v-show="rect.isUser"
+								@click="removeModal = true,removeIndex = index">删除</span>
+								<span class="right iconfont icon-wodebiaozhu" 
+								v-show="!rect.isEdit && rect.isUser" @click="rect.isEdit = true">编辑</span>
+								<span class="right iconfont icon-close"
+								v-show="!rect.isUser" @click="closeMark"> X </span>							
+							</div>
+							<textarea maxlength="200" class="textarea" v-model="rect.tip" v-show="rect.isEdit">{{rect.tip}}</textarea>
+							<div v-show="!rect.isEdit" v-text="rect.tip" class="textarea disabled"></div>
+							<div class="footer" v-show="rect.isEdit" @click="rect.isEdit = false">
+								<em class="limit">{{rect.tip.length}}/200</em>
+								公开
+								<button class="btn-submit" 
+								@click="rect.isShow = false">保存</button>
+							</div>	
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>	
+		
+		<div class="tool">
+			<span class="iconfont icon-duibi biaozhu" @click="isClick = !isClick" :class="isClick?'hover':''" :style="{cursor: isClick?'crosshair':'pointer'}">标注</span>
+			<!-- <span class="duibi-btn" @click="manuscriptModal = true">对比</span> -->
+			<span class="iconfont icon-fangda">放大</span>
+			<span class="iconfont icon-suoxiao">缩小</span>
+		</div>
+
+	</div>
+
+	<div class="sg-modal-wrap" v-show="removeModal">
+		<div class="sg-modal sg-modal-confirm">
+			<div class="sg-modal-body">
+				<p>你确定要删除此标注吗？</p >
+				</div>
+				<div class="sg-modal-footer">
+					<button type="button" class="btn btn-default" @click="closeModal">取消</button>
+					<button type="button" class="btn btn-primary" @click="remove(removeIndex)">确定</button>
+				</div>	
+			</div>
+		</div>	
+
+		<div class="sg-modal-wrap" v-show="manuscriptModal">
+			<div class="sg-modal" style="width: 970px">
+				<div class="sg-modal-title">
+					<span class="iconfont icon-close" @click="closeModal"></span>
+					<ul>
+						<li v-for="(tabname,index) in tabNames" @click="currentTab = index" :class="currentTab == index?'active':''">{{tabname}}</li>					
+					</ul>
+				</div>
+
+				<div class="sg-modal-body" v-show="currentTab == 0">
+					<div class="options">
+						<h4>请选择您需要对比的手稿 {{tags.length}}/4</h4>
+						<div class="tags" v-show="tags0.length">
+							<button class="btn btn-primary">开始对比</button>
+							<span class="tag" v-for="(tag,index) in tags0"><i class="iconfont icon-shanchu closeTag" @click="removeTag0(index)"></i>第{{parseInt(tag) + 1}}页</span>
+						</div>
+					</div>
+
+					<div class="manuscripts">
+						<div class="title">
+							<span v-for="(tabsubName,index) in tabsubNames" @click="currentTabSub = index" 
+							:class="currentTabSub == index?'active':''">
+							<i class="iconfont" :class="tabsubName.icon"></i> 
+							{{tabsubName.name}}
+						</span>
+					</div>
+
+					<div v-show="currentTabSub == 0">
+						<ul class="manus-list">
+							<li v-for="(mark,index) in allMarks">
+								<img :src="mark.img">
+								<div class="action">
+									<i class="iconfont right" @click="addTag0(index)" :class="selectedItems0.indexOf(index) > -1?'icon-xuanzhong1 active':'icon-weixuanzhong1'"></i>
+									第{{index+1}}页
+								</div>
+							</li>
+						</ul>
+						<div class="pages">
+							<div class="details-page-btn">
+								<span class="iconfont icon-prev"></span>
+								<span>
+									<input type="text" class="currentPage-input" value="1">
+									<em>/</em>
+									<em>6</em>
+								</span>
+								<span class="iconfont icon-next"></span>
+							</div>
+						</div>
+					</div>	
+
+					<div v-show="currentTabSub == 1">
+						<ul class="manus-list">
+							<li v-for="(mark,index) in allMarks">
+								<img :src="mark.img">
+								<div class="action">
+									<i class="iconfont right" @click="addTag0(index)" :class="selectedItems0.indexOf(index) > -1?'icon-xuanzhong1 active':'icon-weixuanzhong1'"></i>
+									第{{index+1}}页
+								</div>
+							</li>
+						</ul>
+						<div class="pages">
+							<div class="details-page-btn">
+								<span class="iconfont icon-prev"></span>
+								<span>
+									<input type="text" class="currentPage-input" value="1">
+									<em>/</em>
+									<em>6</em>
+								</span>
+								<span class="iconfont icon-next"></span>
+							</div>
+						</div>
+					</div>
+					<div v-show="currentTabSub == 2" class="search">
+						<div class="compareWorks-search">
+							<i class="iconfont icon-gaojisousuo"></i>
+							<input type="text" placeholder="请输入你需要对比的手稿名称">
+						</div>
+						<div class="compareWorks-type">
+							<span>分类</span>
+							<a v-for="(cate,index) in cates" @click="currentcate = index" :class="currentcate == index?'active':''">{{cate}}</a>
+						</div>
+						<div class="compareWorks-abc">
+							<span>姓氏首字母</span>
+							<a v-for="(letter,index) in letters" @click="currentletter = index" :class="currentletter == index?'active':''">{{letter}}</a>
+						</div>
+						<div class="compareWorks-time">
+							<div class="search-div">
+								<div class="compareWorks-time-label">时间</div>
+								<div class="right-input border-b-d">
+									<div class="data">
+										<input class="controls datetime input-append date form_date" type="text" value="1664年" data-date-format="yyyy">
+										<i class="iconfont icon-xuanzeriqi"></i>
+									</div>
+									<span class="line"></span>
+									<div class="data">
+										<input class="controls datetime input-append date form_date" type="text" value="2017年" data-date-format="yyyy">
+										<i class="iconfont icon-xuanzeriqi"></i>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="compareWorks-area">
+							<span>区域</span>
+							<a v-for="(area,index) in areas" @click="currentarea = index" :class="currentarea == index?'active':''">{{area}}</a>
+						</div>
+						<button type="button" class="compareWorks-btn">搜索</button>
+						<div class="compareWorks-history">
+							<span><i class="iconfont icon-sousuolishi"></i>搜索历史</span>
+							<a :href="history.href" v-for="(history,index) in historys">{{history.name}}</a>
+						</div>
+					</div>
+
+				</div>				
+			</div>	
+
+			<div class="sg-modal-body" v-show="currentTab == 1">
+				<div class="options">
+					<h4>请选择您需要对比的手稿 {{tags.length}}/4</h4>
+					<div class="tags" v-show="tags.length">
+						<button class="btn btn-primary">开始对比</button>
+						<span class="tag" v-for="(tag,index) in tags"><i class="iconfont icon-shanchu closeTag" @click="removeTag(index)"></i>第{{parseInt(tag) + 1}}页</span>
+					</div>
+				</div>
+
+				<div class="manuscripts">
+					<div class="title">
+						<span class="active"><i class="iconfont icon-icon-copy"></i> 手稿名称</span>
+					</div>
+					<ul class="manus-list">
+						<li v-for="(mark,index) in allMarks">
+							<img :src="mark.img">
+							<div class="action">
+								<i class="iconfont right" @click="addTag(index)" :class="selectedItems.indexOf(index) > -1?'icon-xuanzhong1 active':'icon-weixuanzhong1'"></i>
+								第{{index+1}}页
+							</div>
+						</li>
+					</ul>
+					<div class="pages">
+						<div class="details-page-btn">
+							<span class="iconfont icon-prev"></span>
+							<span>
+								<input type="text" class="currentPage-input" value="1">
+								<em>/</em>
+								<em>6</em>
+							</span>
+							<span class="iconfont icon-next"></span>
+						</div>
+					</div>
+				</div>
+				
+			</div>	
+		</div>
+	</div>	
+
+</div>
+<script src="http://cdn.bootcss.com/vue/2.2.1/vue.js"></script>
+<script src="http://cdn.bootcss.com/vue-resource/1.2.0/vue-resource.min.js"></script>
+<script src="http://cdn.bootcss.com/jquery/3.1.1/jquery.min.js"></script>
+<script src="http://cdn.bootcss.com/jquery.panzoom/3.2.2/jquery.panzoom.min.js"></script>
+<script src="http://cdn.bootcss.com/jquery-mousewheel/3.1.13/jquery.mousewheel.min.js"></script>
+<script type="text/javascript">	
+	var box = new Vue({
+		el: '.M-details',
+		data: {
+			currentIndex: null,
+			isDrawing: false,
+			isMoving: false,
+			marks: {		
+				"img":"music-img.jpg",
+				"rects":
+				[		
+					{
+						"x1":650,
+						"y1":260,
+						"x2":820,
+						"y2":320,
+						"tip": "经种种转调后，情绪越来越不安",
+						"tag":"公开",
+						"time":"2017.1.25 13:17",
+						"isEdit": false,
+						"isShow": false
+					},
+					{
+						"x1":500,
+						"y1":600,
+						"x2":600,
+						"y2":700,
+						"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+						"tag":"私密",
+						"time":"2017.1.25 12:20",
+						"isEdit": false,
+						"isShow": false
+					},
+					{
+						"x1":550,
+						"y1":300,
+						"x2":650,
+						"y2":400,
+						"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+						"tag":"私密",
+						"time":"2017.1.25 12:20",
+						"isEdit": false,
+						"isShow": false,
+						"isUser": true
+					}
+				]
+			},
+			allMarks: [
+				{		
+					"img":"music-img.jpg",
+					"rects":
+					[		
+						{
+							"x1":50,
+							"y1":60,
+							"x2":120,
+							"y2":120,
+							"tip": "经种种转调后，情绪越来越不安",
+							"tag":"公开",
+							"time":"2017.1.25 13:17",
+							"isEdit": false,
+							"isShow": false
+						},
+						{
+							"x1":100,
+							"y1":200,
+							"x2":200,
+							"y2":300,
+							"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+							"tag":"私密",
+							"time":"2017.1.25 12:20",
+							"isEdit": false,
+							"isShow": false
+						}
+					]
+				},
+				{		
+					"img":"https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1488515893083&di=354106522bb93c2ceae785c54f387719&imgtype=0&src=http%3A%2F%2Fwenwen.soso.com%2Fp%2F20090807%2F20090807171015-407162616.jpg",
+					"rects":
+					[		
+						{
+							"x1":50,
+							"y1":60,
+							"x2":120,
+							"y2":120,
+							"tip": "经种种转调后，情绪越来越不安",
+							"tag":"公开",
+							"time":"2017.1.25 13:17",
+							"isEdit": false,
+							"isShow": false
+						},
+						{
+							"x1":100,
+							"y1":200,
+							"x2":200,
+							"y2":300,
+							"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+							"tag":"私密",
+							"time":"2017.1.25 12:20",
+							"isEdit": false,
+							"isShow": false
+						}
+					]
+				},
+				{		
+					"img":"https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1488515893083&di=a9be83f04365449de6811393961d8f0c&imgtype=0&src=http%3A%2F%2Fwww.77music.com%2Fyuepuku%2F41%2F20867%2Fprev_20867.0.png%3Fv%3D1343126515",
+					"rects":
+					[		
+						{
+							"x1":50,
+							"y1":60,
+							"x2":120,
+							"y2":120,
+							"tip": "经种种转调后，情绪越来越不安",
+							"tag":"公开",
+							"time":"2017.1.25 13:17",
+							"isEdit": false,
+							"isShow": false
+						},
+						{
+							"x1":100,
+							"y1":200,
+							"x2":200,
+							"y2":300,
+							"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+							"tag":"私密",
+							"time":"2017.1.25 12:20",
+							"isEdit": false,
+							"isShow": false
+						}
+					]
+				},
+				{		
+					"img":"https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1488361205809&di=7204885da25116587f195b0a46f73102&imgtype=0&src=http%3A%2F%2Fwww.77music.com%2Fyuepuku%2F41%2F20827%2Fprev_20827.0.png%3Fv%3D1343115996",
+					"rects":
+					[		
+						{
+							"x1":50,
+							"y1":60,
+							"x2":120,
+							"y2":120,
+							"tip": "经种种转调后，情绪越来越不安",
+							"tag":"公开",
+							"time":"2017.1.25 13:17",
+							"isEdit": false,
+							"isShow": false
+						},
+						{
+							"x1":100,
+							"y1":200,
+							"x2":200,
+							"y2":300,
+							"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+							"tag":"私密",
+							"time":"2017.1.25 12:20",
+							"isEdit": false,
+							"isShow": false
+						}
+					]
+				},
+				{		
+					"img":"https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1488361205809&di=7204885da25116587f195b0a46f73102&imgtype=0&src=http%3A%2F%2Fwww.77music.com%2Fyuepuku%2F41%2F20827%2Fprev_20827.0.png%3Fv%3D1343115996",
+					"rects":
+					[		
+						{
+							"x1":50,
+							"y1":60,
+							"x2":120,
+							"y2":120,
+							"tip": "经种种转调后，情绪越来越不安",
+							"tag":"公开",
+							"time":"2017.1.25 13:17",
+							"isEdit": false,
+							"isShow": false
+						},
+						{
+							"x1":100,
+							"y1":200,
+							"x2":200,
+							"y2":300,
+							"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+							"tag":"私密",
+							"time":"2017.1.25 12:20",
+							"isEdit": false,
+							"isShow": false
+						}
+					]
+				},
+				{		
+					"img":"https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1488361205809&di=7204885da25116587f195b0a46f73102&imgtype=0&src=http%3A%2F%2Fwww.77music.com%2Fyuepuku%2F41%2F20827%2Fprev_20827.0.png%3Fv%3D1343115996",
+					"rects":
+					[		
+						{
+							"x1":50,
+							"y1":60,
+							"x2":120,
+							"y2":120,
+							"tip": "经种种转调后，情绪越来越不安",
+							"tag":"公开",
+							"time":"2017.1.25 13:17",
+							"isEdit": false,
+							"isShow": false
+						},
+						{
+							"x1":100,
+							"y1":200,
+							"x2":200,
+							"y2":300,
+							"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
+							"tag":"私密",
+							"time":"2017.1.25 12:20",
+							"isEdit": false,
+							"isShow": false
+						}
+					]
+				}
+			],
+			isClick: false,
+			removeModal: false,
+			manuscriptModal: false,
+			removeIndex: null,
+			manuscriptModal: false,
+			tags: [],
+			tags0: [],
+			selectedItems: [],
+			selectedItems0: [],
+			timer: null,
+			currentDanmuspan: null,
+			left: [100, 120],
+			tabNames: ['手稿对比', '同稿对比'],
+			tabsubNames: [
+			{
+				'name':'我的收藏',
+				'icon':'icon-wodeshoucang'
+			}, 
+			{
+				'name':'相关手稿',
+				'icon':'icon-xiangguanshougao'
+			}, 
+			{
+				'name':'手稿搜索',
+				'icon':'icon-gaojisousuo'
+			}
+			],
+			currentTab: 0,
+			currentTabSub: 0,
+			letters: ['全部','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'],
+			cates: ['全部','笔记','创作手稿','签名本','日记','实物','书画篆刻','信函','音像资料','照片','证件','纸质资料'],
+			areas: ['全部','国内','国外'],
+			historys: [
+			{
+				'name':'肖邦',
+				'href':''
+			},
+			{
+				'name':'内马尔',
+				'href':''
+			},
+			{
+				'name':'肖邦+夜曲',
+				'href':''
+			},
+			{
+				'name':'肖邦+夜曲+钢琴曲',
+				'href':''
+			}
+			],
+			currentletter: 0,
+			currentcate: 0,
+			currentarea: 0
+		},
+		methods: {
+			beginDraw: function (event) {
+				if (this.isClick) {
+					var rect = {
+						x1: event.pageX, 
+						y1: event.pageY, 
+						x2: event.pageX, 
+						y2: event.pageY,
+						"tag":"私密",
+						"tip":"",
+						"isEdit": true,
+						"isShow": true,
+						"isUser": true
+					};
+					this.marks.rects.push(rect);
+					this.isDrawing = true;
+				}
+			},
+			draw: function (event) {
+				if (!this.isDrawing) {
+					return true;
+				}
+				this.currentIndex = null
+				var rect = this.marks.rects.slice(-1).pop();
+
+				rect.x2 = event.pageX;
+				rect.y2 = event.pageY;				
+			},
+			endDraw: function (event) {
+				this.isDrawing = false
+				this.isClick = false
+			},
+			remove: function (index) {
+				this.marks.rects.splice(index, 1)
+				this.currentIndex = null
+				this.removeModal = false
+			},
+			getPosition: function (item) {
+				return {
+					left: (item.x1) + 'px',
+					top: (item.y1) + 'px',
+					width: (item.x2 - item.x1) + 'px',
+					height: (item.y2- item.y1) + 'px'
+				};
+			},
+			closeModal: function () {
+				this.removeModal = false
+				this.manuscriptModal = false
+			},
+			addTag: function (index) {	
+				if (this.tags.length < 4 && this.selectedItems.indexOf(index) == -1) {				
+					this.selectedItems.push(index)
+					this.tags.push(index)
+				}		
+			},
+			addTag0: function (index) {
+				if (this.tags0.length < 4 && this.selectedItems0.indexOf(index) == -1) {				
+					this.selectedItems0.push(index)
+					this.tags0.push(index)
+				}	
+			},
+			removeTag: function (index) {
+				this.tags.splice(index, 1)	
+				this.selectedItems.splice(index, 1)
+			},
+			removeTag0: function (index) {
+				this.tags0.splice(index, 1)	
+				this.selectedItems0.splice(index, 1)
+			},
+			moveDanmu: function () {
+				// this.currentDanmuspan = null
+				if (this.currentDanmuspan == null) {
+					var that = this
+					this.timer = setInterval(function () {
+						for (i in that.left) {
+							Vue.set(that.left, i, that.left[i]-1)
+							if (that.left[i] < -50) {
+								Vue.set(that.left,i,150)
+							}
+						}
+						
+					},100)
+				}
+			},
+			pauseDanmu: function () {
+				clearInterval(this.timer)
+			},
+			closeMark: function () {
+				this.currentDanmuspan = null
+				this.moveDanmu()
+			}
+		},
+		mounted: function () {
+			this.moveDanmu()
+		},
+		computed: {
+			imgStyle: function () {
+				return {
+					'max-height': (document.body.clientHeight - 60)  + 'px'
+				}
+			},
+			divStyle: function () {
+				return {
+					'height': (document.body.clientHeight - 60) + 'px'
+				}
+			}
+		}
+	})
+
+	var $canvas = $('.canvas');
+	$canvas.find('.zoom').panzoom({ 
+		$zoomIn: $(".icon-fangda"),
+		$zoomOut: $(".icon-suoxiao"),
+		panOnlyWhenZoomed: true,
+		minScale: 1,
+		contain: 'invert'
+	});
+</script>
+</body>
+</html>
