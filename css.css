@@ -177,8 +177,6 @@
   -webkit-justify-content: center;
       -ms-flex-pack: center;
           justify-content: center;
-  position: fixed;
-  bottom: 0;
 }
 .M-details .tool span {
   font-size: 24px;

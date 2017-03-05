@@ -22,7 +22,7 @@
 				<div class="zoom">
 					<!-- 手稿图片 -->
 					<div class="imgbox">
-						<img :src="marks.img" @mousedown.prevent="beginDraw" style="width: 1000px;height: 800px;">
+						<img :src="marks.img" @mousedown.prevent="beginDraw" style="width: 700px;height: 600px;">
 						<!-- 手稿标注 -->
 						<div class="rect" v-for="(rect, index) in marks.rects"
 						@mouseenter.stop="currentIndex = index" 
@@ -263,9 +263,9 @@
 					},
 					{
 						"x1":500,
-						"y1":600,
+						"y1":400,
 						"x2":600,
-						"y2":700,
+						"y2":500,
 						"tip": "《升C小调夜曲》，为三段体，第一段以柔声奏出暗淡的旋，经种种转调后，情绪越来越不安;中段速度转快，出现悲痛的第二主题，它化解为明朗后再复归第一主题经种种转调后，情绪越来越不安;中段速度转快",
 						"tag":"私密",
 						"time":"2017.1.25 12:20",
@@ -606,16 +606,6 @@
 			this.moveDanmu()
 		},
 		computed: {
-			imgStyle: function () {
-				return {
-					'max-height': (document.body.clientHeight - 60)  + 'px'
-				}
-			},
-			divStyle: function () {
-				return {
-					'height': (document.body.clientHeight - 60) + 'px'
-				}
-			}
 		}
 	})
 
